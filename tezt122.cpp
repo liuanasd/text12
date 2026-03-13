@@ -24,17 +24,20 @@ int main(){
     }
     while(true){
         char buf[1024];
+         memset(&buf,0,sizeof(buf));
         std::string wt;
         getline(std::cin,wt);
         write(severfd,wt.c_str(),wt.size());
-        int n=read(severfd,buf,sizeof(buf)-1);
-        buf[n]='\0';
-        std::cout<<"读到数据"<<buf<<std::endl<<std::flush;
-        if(n<0) {
+         int n=read(severfd,buf,sizeof(buf));
+          if(n<0) {
             perror("数据读取失败");
             close(severfd);
             continue;
         }
+        std::cout<<"读到数据"<<buf<<std::endl<<std::flush;
+        buf[n]='\0';
+        std::cout<<n<<"字节"<<std::endl;
+        std::cout.flush();
     }
     close(severfd);
     return 0;

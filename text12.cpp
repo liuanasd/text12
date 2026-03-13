@@ -12,7 +12,7 @@
             
         }
         void* asd(void *arg){
-        int s= (long)arg;
+        int s= (int)(long)arg;
             while(true){
         char buf[bufsize];
         memset(&buf,0,sizeof(buf));
@@ -43,10 +43,15 @@
             close (s);
             return NULL;
         }
-        buf[n]='\0';
         if(n>0){
-            std::cout<<"读到数据"<<buf<<std::endl<<std::flush;
-            std::cout<<n<<std::endl;
+            buf[n]='\0';
+            std::cout<<"读到数据"<<buf<<std::endl;
+            std::cout<<n<<"字节"<<std::endl;
+            memset(&buf,0,sizeof(buf));
+            std::string wt;
+            getline(std::cin,wt);
+            write(s,wt.c_str(),wt.size());
+            std::cout.flush();
         }
         }
         }
@@ -59,6 +64,12 @@
         sever_fd.sever.sin_family=AF_INET;
         sever_fd.sever.sin_port=htons(port_number);
         sever_fd.sever.sin_addr.s_addr=htonl(INADDR_ANY);
+        int opt=1;
+        if(setsockopt(sever_fd.seveerfd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt))<0){
+            perror("端口复用失败");
+            close(sever_fd.seveerfd);
+            return -1;
+        }
         if(bind(sever_fd.seveerfd,(struct sockaddr*)&sever_fd.sever,sizeof(sever_fd.sever))<0){
             perror("绑定失败");
             close(sever_fd.seveerfd);
@@ -80,7 +91,7 @@
         sockname.push_back(s);
         pthread_mutex_unlock(&mutex);
         pthread_t tid;
-        if(pthread_create(&tid,NULL,asd,(void*)s)!=0){
+        if(pthread_create(&tid,NULL,asd,(void*)(long)s)!=0){
             perror("线程创建失败");
             pthread_mutex_lock(&mutex);
             sockname.pop_back();
