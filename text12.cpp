@@ -1,7 +1,7 @@
         #include "text12.h"
         #define bufsize 1024
         #define port_number 7856
-        std::vector<int> sockname;//保存套接字
+        int epfd;
         pthread_mutex_t mutex; //互斥锁
         struct sever_init{
             int seveerfd;//套接字
@@ -20,12 +20,7 @@
         if(n<0){
             perror("读取失败");
             pthread_mutex_lock(&mutex);
-             for(int i=0;i<sockname.size();i++){
-                if(sockname[i]==s){
-                    sockname.erase(sockname.begin()+i);
-                    break;
-                }
-            }
+           epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
             pthread_mutex_unlock(&mutex);
             close(s);
             return NULL;
@@ -33,12 +28,7 @@
         if(n==0){
             std::cout<<"客户端断开连接"<<std::endl;
             pthread_mutex_lock(&mutex);
-            for(int i=0;i<sockname.size();i++){
-                if(sockname[i]==s){
-                    sockname.erase(sockname.begin()+i);
-                    break;
-                }
-            }
+          epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
             pthread_mutex_unlock(&mutex);
             close (s);
             return NULL;
@@ -88,13 +78,24 @@
             continue;
         }
         pthread_mutex_lock(&mutex);
-        sockname.push_back(s);
+       epfd=epoll_create1(0);
+       if(epfd<0){
+        perror("epoll创建失败");
+        return -1;
+       }
+     struct epoll_event ev;
+     ev.events=EPOLLIN|EPOLLET;
+     ev.data.fd=s;
+     if(epoll_ctl(epfd,EPOLL_CTL_ADD,s,&ev)<0){
+        perror("添加失败");
+        return -1;
+     }
         pthread_mutex_unlock(&mutex);
         pthread_t tid;
         if(pthread_create(&tid,NULL,asd,(void*)(long)s)!=0){
             perror("线程创建失败");
             pthread_mutex_lock(&mutex);
-            sockname.pop_back();
+            epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
             pthread_mutex_unlock(&mutex);
             continue;
         }
