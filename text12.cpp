@@ -2,15 +2,14 @@
         #define bufsize 1024
         #define port_number 7856
         int epfd;
+        struct epoll_event ev;
+         std::vector<int> cliner_fd;
         pthread_mutex_t mutex; //互斥锁
         struct sever_init{
             int seveerfd;//套接字
             struct sockaddr_in sever;//服务器地址
         };
         struct sockaddr_in cliner;//客户地址
-        void task(){
-            
-        }
         void* asd(void *arg){
         int s= (int)(long)arg;
             while(true){
@@ -21,6 +20,12 @@
             perror("读取失败");
             pthread_mutex_lock(&mutex);
            epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
+           for(int i=0;i<cliner_fd.size();i++){
+            if(cliner_fd[i]==s){
+                cliner_fd.erase(cliner_fd.begin()+i);
+                break;
+            }
+           }
             pthread_mutex_unlock(&mutex);
             close(s);
             return NULL;
@@ -29,24 +34,37 @@
             std::cout<<"客户端断开连接"<<std::endl;
             pthread_mutex_lock(&mutex);
           epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
+          for(int i=0;i<cliner_fd.size();i++){
+            if(cliner_fd[i]==s){
+                cliner_fd.erase(cliner_fd.begin()+i);
+                break;
+            }
+           }
             pthread_mutex_unlock(&mutex);
             close (s);
             return NULL;
         }
+        pthread_mutex_lock(&mutex);
         if(n>0){
             buf[n]='\0';
-            std::cout<<"读到数据"<<buf<<std::endl;
-            std::cout<<n<<"字节"<<std::endl;
+            for(int i=0;i<cliner_fd.size();i++){
+            if(cliner_fd[i]!=s){
+                write(cliner_fd[i],buf,n);
+            }
+            }
             memset(&buf,0,sizeof(buf));
-            std::string wt;
-            getline(std::cin,wt);
-            write(s,wt.c_str(),wt.size());
             std::cout.flush();
         }
+        pthread_mutex_unlock(&mutex);
         }
         }
         int main()
         {
+        epfd=epoll_create1(0);
+       if(epfd<0){
+        perror("epoll创建失败");
+        return -1;
+       };
             pthread_mutex_init(&mutex, NULL);
         sever_init sever_fd;
         memset(&sever_fd.sever,0,sizeof(sever_fd.sever));
@@ -77,25 +95,35 @@
             perror("连接失败");
             continue;
         }
+        int flags = fcntl(s, F_GETFL, 0);
+         if (flags == -1) {  // 系统调用失败返回-1
+    perror("fcntl F_GETFL 系统调用失败");
+    close(s);
+    continue;
+}
+if (fcntl(s, F_SETFL, flags | O_NONBLOCK) == -1) {
+    perror("fcntl F_SETFL 系统调用失败");
+    close(s);
+    continue;
+}
+//设置非阻塞，阻塞会导致线程直接退出反之会一直等待在read
         pthread_mutex_lock(&mutex);
-       epfd=epoll_create1(0);
-       if(epfd<0){
-        perror("epoll创建失败");
-        return -1;
-       }
-     struct epoll_event ev;
-     ev.events=EPOLLIN|EPOLLET;
+              ev.events=EPOLLIN|EPOLLET;
      ev.data.fd=s;
      if(epoll_ctl(epfd,EPOLL_CTL_ADD,s,&ev)<0){
         perror("添加失败");
-        return -1;
+        continue;
      }
+     pthread_mutex_unlock(&mutex);
+     pthread_mutex_lock(&mutex);
+     cliner_fd.push_back(s);
         pthread_mutex_unlock(&mutex);
         pthread_t tid;
         if(pthread_create(&tid,NULL,asd,(void*)(long)s)!=0){
             perror("线程创建失败");
             pthread_mutex_lock(&mutex);
             epoll_ctl(epfd,EPOLL_CTL_DEL,s,NULL);
+            cliner_fd.pop_back();
             pthread_mutex_unlock(&mutex);
             continue;
         }
