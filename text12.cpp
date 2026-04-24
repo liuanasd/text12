@@ -16,11 +16,11 @@ std::string get_client_address(const sockaddr_in& client_addr) {
 }
 
 bool send_message(int client_fd, const std::string& msg) {
-    int total = 0;
-    int len = msg.size();
+    size_t total = 0;
+    size_t len = msg.size();
 
     while (total < len) {
-        int n = send(client_fd, msg.c_str() + total, len - total, 0);
+        ssize_t n = send(client_fd, msg.c_str() + total, len - total, 0);
         if (n < 0) {
             if (errno == EINTR) {
                 continue;
@@ -60,6 +60,13 @@ int remove_client(int client_fd, std::string& name) {
         }
     }
 
+    int count = client_list.size();
+    pthread_mutex_unlock(&client_mutex);
+    return count;
+}
+
+int get_online_count() {
+    pthread_mutex_lock(&client_mutex);
     int count = client_list.size();
     pthread_mutex_unlock(&client_mutex);
     return count;
@@ -126,7 +133,7 @@ void handle_line(int client_fd, const std::string& line, std::string& name, bool
         send_message(client_fd, welcome);
         std::cout << online_msg;
         std::cout.flush();
-        broadcast_message(online_msg, -1);
+        broadcast_message(online_msg, client_fd);
         return;
     }
 
@@ -138,7 +145,7 @@ void handle_line(int client_fd, const std::string& line, std::string& name, bool
     std::string msg = "[" + name + "] " + line + "\n";
     std::cout << msg;
     std::cout.flush();
-    broadcast_message(msg, -1);
+    broadcast_message(msg, client_fd);
 }
 
 void* client_thread(void* arg) {
@@ -167,6 +174,8 @@ void* client_thread(void* arg) {
         }
 
         // 用换行符区分一条完整消息，避免一次 recv 收到半条或多条
+        cache.append(buf, n);
+
         cache.append(buf, n);
 
         std::string::size_type pos = 0;
