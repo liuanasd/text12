@@ -75,13 +75,26 @@ int get_online_count() {
 void broadcast_message(const std::string& msg, int skip_fd) {
     pthread_mutex_lock(&client_mutex);
 
+    std::vector<int> bad_fds;
+
     for (size_t i = 0; i < client_list.size(); i++) {
         if (client_list[i].client_fd == skip_fd) {
             continue;
         }
 
         if (!send_message(client_list[i].client_fd, msg)) {
+            bad_fds.push_back(client_list[i].client_fd);
             std::cout << "给 " << client_list[i].name << " 发送消息失败" << std::endl;
+        }
+    }
+
+    for (size_t i = 0; i < bad_fds.size(); i++) {
+        for (size_t j = 0; j < client_list.size(); j++) {
+            if (client_list[j].client_fd == bad_fds[i]) {
+                shutdown(client_list[j].client_fd, SHUT_RDWR);
+                client_list.erase(client_list.begin() + j);
+                break;
+            }
         }
     }
 
